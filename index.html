@@ -19,6 +19,32 @@
       touch-action: none;
     }
 
+    /* phone ui */
+    #phoneUi{
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      display: none;
+      gap: 10px;
+      z-index: 20;
+      pointer-events: auto;
+    }
+    #phoneUi button{
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.08);
+      color: #e5e7eb;
+      font-size: 14px;
+      font-weight: 600;
+      backdrop-filter: blur(10px);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    #phoneUi button:active{
+      transform: scale(0.98);
+    }
+
     /* skin overlay */
     #skinOverlay{
       position:fixed; inset:0;
@@ -26,6 +52,7 @@
       background: radial-gradient(ellipse at center, rgba(26,31,46,0.96) 0%, rgba(11,15,20,0.98) 100%);
       backdrop-filter: blur(12px);
       animation: fadeIn 0.3s ease;
+      z-index: 30;
     }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     
@@ -43,9 +70,8 @@
       transform: scale(0.95);
       animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     }
-    @keyframes popIn {
-      to { transform: scale(1); }
-    }
+    @keyframes popIn { to { transform: scale(1); } }
+
     #title{ 
       font-size:24px; 
       margin:0 0 8px 0; 
@@ -91,9 +117,7 @@
         inset 0 1px 0 rgba(255,255,255,0.3);
       transform: translateY(-1px);
     }
-    button:active {
-      transform: translateY(0);
-    }
+    button:active { transform: translateY(0); }
 
     #previewWrap{
       display:flex; gap:12px; align-items:center; margin-top:14px;
@@ -122,6 +146,11 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+
+<div id="phoneUi">
+  <button id="skinsBtn" type="button">skins</button>
+  <button id="restartBtn" type="button">restart</button>
+</div>
 
 <div id="skinOverlay">
   <div id="panel">
@@ -171,83 +200,6 @@ function fit() {
 window.addEventListener("resize", fit);
 fit();
 
-/* --- touch support (adds phone controls without changing gameplay) --- */
-let touchActive = false;
-let touchId = null;
-let touchStartX = 0, touchStartY = 0;
-let touchDx = 0, touchDy = 0;
-
-function clearTouch() {
-  touchActive = false;
-  touchId = null;
-  touchDx = 0;
-  touchDy = 0;
-}
-
-function isOverlayOpen() {
-  return overlay.style.display !== "none";
-}
-
-// prevent scroll / bounce on mobile
-window.addEventListener("touchmove", (e) => {
-  if (!isOverlayOpen()) e.preventDefault();
-}, { passive: false });
-
-window.addEventListener("touchstart", (e) => {
-  if (isOverlayOpen()) return;
-
-  // 1st finger becomes the movement stick
-  for (const t of e.changedTouches) {
-    if (touchId === null) {
-      touchId = t.identifier;
-      touchActive = true;
-      touchStartX = t.clientX;
-      touchStartY = t.clientY;
-      touchDx = 0; touchDy = 0;
-      break;
-    }
-  }
-
-  // quick tap with any finger triggers dash (space)
-  keys.add(" ");
-  setTimeout(() => keys.delete(" "), 60);
-
-  e.preventDefault();
-}, { passive: false });
-
-window.addEventListener("touchmove", (e) => {
-  if (!touchActive || isOverlayOpen()) return;
-
-  for (const t of e.changedTouches) {
-    if (t.identifier === touchId) {
-      touchDx = t.clientX - touchStartX;
-      touchDy = t.clientY - touchStartY;
-      break;
-    }
-  }
-
-  e.preventDefault();
-}, { passive: false });
-
-window.addEventListener("touchend", (e) => {
-  if (!touchActive) return;
-
-  for (const t of e.changedTouches) {
-    if (t.identifier === touchId) {
-      clearTouch();
-      break;
-    }
-  }
-
-  e.preventDefault();
-}, { passive: false });
-
-window.addEventListener("touchcancel", (e) => {
-  clearTouch();
-  e.preventDefault();
-}, { passive: false });
-
-/* --- keyboard --- */
 const keys = new Set();
 window.addEventListener("keydown", e => {
   keys.add(e.key.toLowerCase());
@@ -255,10 +207,14 @@ window.addEventListener("keydown", e => {
 });
 window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
 
+function pressKeyOnce(k, ms=80){
+  keys.add(k);
+  setTimeout(() => keys.delete(k), ms);
+}
+
 function rand(a,b){ return a + Math.random()*(b-a); }
 function clamp(x,a,b){ return Math.max(a, Math.min(b,x)); }
 function len(x,y){ return Math.hypot(x,y); }
-
 
 /* -------- skins -------- */
 const overlay = document.getElementById("skinOverlay");
@@ -336,7 +292,6 @@ function drawPlayerShape(gctx, x, y, r, shape, color, alpha=1) {
 
 function updatePreview() {
   pctx.clearRect(0,0,64,64);
-  // faint bg
   pctx.fillStyle = "rgba(255,255,255,0.05)";
   pctx.fillRect(0,0,64,64);
   drawPlayerShape(pctx, 32, 32, 14, shapeSel.value, colorSel.value, 1);
@@ -354,12 +309,8 @@ colorSel.addEventListener("change", () => {
 });
 updatePreview();
 
-function openSkins() {
-  overlay.style.display = "flex";
-}
-function closeSkins() {
-  overlay.style.display = "none";
-}
+function openSkins() { overlay.style.display = "flex"; }
+function closeSkins() { overlay.style.display = "none"; }
 
 playBtn.addEventListener("click", () => {
   skin = loadSkin();
@@ -368,10 +319,102 @@ playBtn.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "escape") {
-    openSkins();
-  }
+  if (e.key.toLowerCase() === "escape") openSkins();
 });
+
+/* -------- phone detection + phone buttons -------- */
+const phoneUi = document.getElementById("phoneUi");
+const skinsBtn = document.getElementById("skinsBtn");
+const restartBtn = document.getElementById("restartBtn");
+
+const isPhone = (("ontouchstart" in window) || (navigator.maxTouchPoints > 0)) && window.matchMedia("(pointer: coarse)").matches;
+if (isPhone) {
+  phoneUi.style.display = "flex";
+  const tip = document.getElementById("tip");
+  tip.innerHTML = 'phone: <span class="pill">drag to move</span> <span class="pill">tap to dash</span> <span class="pill">buttons for skins and restart</span>';
+}
+
+skinsBtn.addEventListener("touchstart", (e) => { e.preventDefault(); openSkins(); }, { passive:false });
+skinsBtn.addEventListener("click", () => openSkins());
+
+restartBtn.addEventListener("touchstart", (e) => { e.preventDefault(); pressKeyOnce("r", 120); }, { passive:false });
+restartBtn.addEventListener("click", () => pressKeyOnce("r", 120));
+
+/* -------- touch movement + tap dash -------- */
+let touchActive = false;
+let touchId = null;
+let touchStartX = 0, touchStartY = 0;
+let touchDx = 0, touchDy = 0;
+
+function clearTouch() {
+  touchActive = false;
+  touchId = null;
+  touchDx = 0;
+  touchDy = 0;
+}
+
+function isOverlayOpen() {
+  return overlay.style.display !== "none";
+}
+
+window.addEventListener("touchmove", (e) => {
+  if (!isOverlayOpen()) e.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchstart", (e) => {
+  if (isOverlayOpen()) return;
+
+  // ignore taps on phone ui
+  if (e.target && e.target.closest && e.target.closest("#phoneUi")) return;
+
+  for (const t of e.changedTouches) {
+    if (touchId === null) {
+      touchId = t.identifier;
+      touchActive = true;
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchDx = 0; touchDy = 0;
+      break;
+    }
+  }
+
+  // tap dash
+  pressKeyOnce(" ", 60);
+
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchmove", (e) => {
+  if (!touchActive || isOverlayOpen()) return;
+
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchId) {
+      touchDx = t.clientX - touchStartX;
+      touchDy = t.clientY - touchStartY;
+      break;
+    }
+  }
+
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchend", (e) => {
+  if (!touchActive) return;
+
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchId) {
+      clearTouch();
+      break;
+    }
+  }
+
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchcancel", (e) => {
+  clearTouch();
+  e.preventDefault();
+}, { passive: false });
 
 /* -------- game -------- */
 let best = 0;
@@ -482,18 +525,15 @@ function startGame() {
     if (bombTimer <= 0) { spawnBomb(); bombTimer = bombGap; }
 
     let ax = 0, ay = 0;
-
     const up = keys.has("arrowup") || keys.has("w");
     const down = keys.has("arrowdown") || keys.has("s");
     const left = keys.has("arrowleft") || keys.has("a");
     const right = keys.has("arrowright") || keys.has("d");
-
     if (up) ay -= 1;
     if (down) ay += 1;
     if (left) ax -= 1;
     if (right) ax += 1;
 
-    // touch movement maps to same ax/ay
     if (!up && !down && !left && !right && touchActive) {
       const dead = 10;
       const max = 70;
@@ -672,7 +712,7 @@ function startGame() {
       ctx.textAlign = "center";
       ctx.fillText("game over", w/2, h/2 - 12);
       ctx.font = "16px system-ui, -apple-system, segoe ui, roboto, arial";
-      ctx.fillText("press r to restart", w/2, h/2 + 18);
+      ctx.fillText(isPhone ? "tap restart button" : "press r to restart", w/2, h/2 + 18);
       ctx.globalAlpha = 1;
     }
 
@@ -680,7 +720,7 @@ function startGame() {
     ctx.globalAlpha = 0.7;
     ctx.font = "13px system-ui, -apple-system, segoe ui, roboto, arial";
     ctx.textAlign = "right";
-    ctx.fillText("space to dash, esc skins", w-14, 22);
+    ctx.fillText(isPhone ? "tap to dash, drag to move" : "space to dash, esc skins", w-14, 22);
     ctx.globalAlpha = 1;
   }
 
