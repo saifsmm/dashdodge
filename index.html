@@ -1,0 +1,609 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>dash dodge</title>
+  <style>
+    html, body { 
+      margin:0; height:100%; 
+      background: radial-gradient(ellipse at center, #1a1f2e 0%, #0b0f14 100%);
+      font-family: system-ui, -apple-system, segoe ui, roboto, arial;
+      overflow: hidden;
+    }
+    canvas { 
+      display:block; margin:0 auto; 
+      background: radial-gradient(ellipse at center, #1a1f2e 0%, #0b0f14 100%);
+      box-shadow: 0 0 100px rgba(0,0,0,0.8);
+    }
+
+    /* skin overlay */
+    #skinOverlay{
+      position:fixed; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      background: radial-gradient(ellipse at center, rgba(26,31,46,0.96) 0%, rgba(11,15,20,0.98) 100%);
+      backdrop-filter: blur(12px);
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
+    #panel{
+      width:min(520px, calc(100% - 32px));
+      border:1px solid rgba(110,231,183,0.2);
+      border-radius:20px;
+      padding:24px;
+      background: linear-gradient(135deg, rgba(26,31,46,0.8) 0%, rgba(15,20,30,0.9) 100%);
+      box-shadow: 
+        0 20px 60px rgba(0,0,0,0.5),
+        0 0 40px rgba(110,231,183,0.1),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+      color:#e5e7eb;
+      transform: scale(0.95);
+      animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    @keyframes popIn {
+      to { transform: scale(1); }
+    }
+    #title{ 
+      font-size:24px; 
+      margin:0 0 8px 0; 
+      font-weight:700;
+      background: linear-gradient(135deg, #6ee7b7 0%, #9ae6ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    #sub{ font-size:13px; opacity:0.7; margin:0 0 20px 0; line-height:1.5; }
+    .row{ display:flex; gap:12px; align-items:center; margin:10px 0; }
+    label{ font-size:13px; opacity:0.85; width:120px; }
+    select, button{
+      width:100%;
+      padding:12px 14px;
+      border-radius:12px;
+      border:1px solid rgba(110,231,183,0.15);
+      background: linear-gradient(135deg, rgba(26,31,46,0.6) 0%, rgba(15,20,30,0.8) 100%);
+      color:#e5e7eb;
+      outline:none;
+      font-size:14px;
+      transition: all 0.2s ease;
+    }
+    select:hover, select:focus {
+      border-color: rgba(110,231,183,0.3);
+      background: linear-gradient(135deg, rgba(26,31,46,0.8) 0%, rgba(15,20,30,0.9) 100%);
+    }
+    button{ 
+      cursor:pointer;
+      font-weight:600;
+      background: linear-gradient(135deg, #6ee7b7 0%, #4ade80 100%);
+      border:1px solid rgba(110,231,183,0.3);
+      color:#0b0f14;
+      box-shadow: 
+        0 4px 12px rgba(110,231,183,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    button:hover{ 
+      background: linear-gradient(135deg, #7ff0c7 0%, #5be890 100%);
+      box-shadow: 
+        0 6px 20px rgba(110,231,183,0.4),
+        inset 0 1px 0 rgba(255,255,255,0.3);
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+
+    #previewWrap{
+      display:flex; gap:12px; align-items:center; margin-top:14px;
+      padding:12px; border-radius:14px;
+      border:1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.03);
+    }
+    #preview{
+      width:64px; height:64px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.25);
+      display:flex; align-items:center; justify-content:center;
+    }
+    #tip{ font-size:12px; opacity:0.75; line-height:1.4; }
+    .pill{
+      display:inline-block;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      font-size:12px;
+      opacity:0.9;
+    }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="skinOverlay">
+  <div id="panel">
+    <p id="title">player skin</p>
+    <p id="sub">pick your ball look, then press play. press esc anytime to come back here.</p>
+
+    <div class="row">
+      <label>shape</label>
+      <select id="shapeSel">
+        <option value="circle">circle</option>
+        <option value="square">square</option>
+        <option value="triangle">triangle</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>color</label>
+      <select id="colorSel"></select>
+    </div>
+
+    <div id="previewWrap">
+      <div id="preview">
+        <canvas id="p" width="64" height="64"></canvas>
+      </div>
+      <div id="tip">
+        controls: <span class="pill">arrows / wasd</span> <span class="pill">space dash</span> <span class="pill">r restart</span><br>
+        new: <span class="pill">esc</span> to open skins
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <button id="playBtn">play</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+function fit() {
+  const w = Math.min(window.innerWidth, 900);
+  const h = Math.min(window.innerHeight, 600);
+  canvas.width = Math.floor(w);
+  canvas.height = Math.floor(h);
+}
+window.addEventListener("resize", fit);
+fit();
+
+const keys = new Set();
+window.addEventListener("keydown", e => {
+  keys.add(e.key.toLowerCase());
+  if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) e.preventDefault();
+});
+window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
+
+function rand(a,b){ return a + Math.random()*(b-a); }
+function clamp(x,a,b){ return Math.max(a, Math.min(b,x)); }
+function len(x,y){ return Math.hypot(x,y); }
+
+
+/* -------- skins -------- */
+const overlay = document.getElementById("skinOverlay");
+const shapeSel = document.getElementById("shapeSel");
+const colorSel = document.getElementById("colorSel");
+const playBtn = document.getElementById("playBtn");
+
+const previewCanvas = document.getElementById("p");
+const pctx = previewCanvas.getContext("2d");
+
+const SKIN_KEY = "dash_dodge_skin_v1";
+
+const palette = [
+  { name: "mint", value: "#6ee7b7" },
+  { name: "ice", value: "#9ae6ff" },
+  { name: "rose", value: "#ff4d6d" },
+  { name: "amber", value: "#ffb86b" },
+  { name: "violet", value: "#c4b5fd" },
+  { name: "lime", value: "#a3e635" },
+  { name: "white", value: "#e5e7eb" }
+];
+
+for (const c of palette) {
+  const opt = document.createElement("option");
+  opt.value = c.value;
+  opt.textContent = c.name;
+  colorSel.appendChild(opt);
+}
+
+function loadSkin() {
+  try {
+    const raw = localStorage.getItem(SKIN_KEY);
+    if (!raw) return { shape:"circle", color:"#6ee7b7" };
+    const s = JSON.parse(raw);
+    const okShape = ["circle","square","triangle"].includes(s.shape);
+    const okColor = typeof s.color === "string" && s.color.length > 0;
+    return { shape: okShape ? s.shape : "circle", color: okColor ? s.color : "#6ee7b7" };
+  } catch {
+    return { shape:"circle", color:"#6ee7b7" };
+  }
+}
+
+function saveSkin(skin) {
+  localStorage.setItem(SKIN_KEY, JSON.stringify(skin));
+}
+
+let skin = loadSkin();
+shapeSel.value = skin.shape;
+colorSel.value = skin.color;
+
+function drawPlayerShape(gctx, x, y, r, shape, color, alpha=1) {
+  gctx.save();
+  gctx.globalAlpha = alpha;
+  gctx.fillStyle = color;
+
+  if (shape === "circle") {
+    gctx.beginPath();
+    gctx.arc(x, y, r, 0, Math.PI*2);
+    gctx.fill();
+  } else if (shape === "square") {
+    const s = r * 1.8;
+    gctx.fillRect(x - s/2, y - s/2, s, s);
+  } else if (shape === "triangle") {
+    const s = r * 2.0;
+    gctx.beginPath();
+    gctx.moveTo(x, y - s/2);
+    gctx.lineTo(x - s/2, y + s/2);
+    gctx.lineTo(x + s/2, y + s/2);
+    gctx.closePath();
+    gctx.fill();
+  }
+
+  gctx.restore();
+}
+
+function updatePreview() {
+  pctx.clearRect(0,0,64,64);
+  // faint bg
+  pctx.fillStyle = "rgba(255,255,255,0.05)";
+  pctx.fillRect(0,0,64,64);
+  drawPlayerShape(pctx, 32, 32, 14, shapeSel.value, colorSel.value, 1);
+}
+
+shapeSel.addEventListener("change", () => {
+  skin.shape = shapeSel.value;
+  saveSkin(skin);
+  updatePreview();
+});
+colorSel.addEventListener("change", () => {
+  skin.color = colorSel.value;
+  saveSkin(skin);
+  updatePreview();
+});
+updatePreview();
+
+function openSkins() {
+  overlay.style.display = "flex";
+}
+function closeSkins() {
+  overlay.style.display = "none";
+}
+
+playBtn.addEventListener("click", () => {
+  skin = loadSkin();
+  closeSkins();
+  if (!gameStarted) startGame();
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "escape") {
+    openSkins();
+  }
+});
+
+/* -------- game -------- */
+let best = 0;
+let gameStarted = false;
+
+function startGame() {
+  gameStarted = true;
+
+  const w = canvas.width, h = canvas.height;
+
+  const player = {
+    x: w*0.5, y: h*0.5,
+    r: 10,
+    vx: 0, vy: 0,
+    dashCd: 0,
+    inv: 0
+  };
+
+  const orbs = [];
+  const bombs = [];
+  const pulses = [];
+
+  let t = 0;
+  let score = 0;
+  let alive = true;
+
+  function spawnOrb() {
+    const side = Math.floor(rand(0,4));
+    let x, y;
+    if (side === 0) { x = -20; y = rand(0,h); }
+    if (side === 1) { x = w+20; y = rand(0,h); }
+    if (side === 2) { x = rand(0,w); y = -20; }
+    if (side === 3) { x = rand(0,w); y = h+20; }
+
+    const speed = rand(70, 150) + Math.min(score*0.2, 120);
+    const ang = Math.atan2(player.y - y, player.x - x) + rand(-0.35, 0.35);
+    orbs.push({
+      x, y,
+      r: rand(8, 14),
+      vx: Math.cos(ang)*speed,
+      vy: Math.sin(ang)*speed
+    });
+  }
+
+  function spawnBomb() {
+    bombs.push({
+      x: rand(60, w-60),
+      y: rand(60, h-60),
+      r: 14,
+      fuse: rand(1.2, 2.2),
+      boom: false
+    });
+  }
+
+  function explode(b) {
+    b.boom = true;
+    const ring = { x:b.x, y:b.y, r:0, max: rand(130, 200), speed: rand(260, 360) };
+    pulses.push(ring);
+
+    for (let i = orbs.length-1; i >= 0; i--) {
+      const o = orbs[i];
+      const d = len(o.x - b.x, o.y - b.y);
+      if (d < ring.max*0.65) {
+        orbs.splice(i,1);
+        score += 6;
+      } else if (d < ring.max) {
+        const k = (ring.max - d) / ring.max;
+        const ax = (o.x - b.x) / (d || 1);
+        const ay = (o.y - b.y) / (d || 1);
+        o.vx += ax * 220 * k;
+        o.vy += ay * 220 * k;
+      }
+    }
+  }
+
+  function reset() {
+    orbs.length = 0;
+    bombs.length = 0;
+    pulses.length = 0;
+    player.x = w*0.5; player.y = h*0.5;
+    player.vx = 0; player.vy = 0;
+    player.dashCd = 0; player.inv = 0;
+    t = 0; score = 0; alive = true;
+  }
+
+  let orbTimer = 0;
+  let bombTimer = 0;
+
+  function step(dt) {
+    if (keys.has("r")) reset();
+
+    if (!alive) {
+      for (const o of orbs) { o.x += o.vx*dt; o.y += o.vy*dt; }
+      for (const p of pulses) { p.r = Math.min(p.max, p.r + p.speed*dt); }
+      return;
+    }
+
+    t += dt;
+    score += dt * 1.8;
+    best = Math.max(best, Math.floor(score));
+
+    orbTimer -= dt;
+    const orbGap = Math.max(0.18, 0.7 - Math.min(score*0.002, 0.5));
+    if (orbTimer <= 0) { spawnOrb(); orbTimer = orbGap; }
+
+    bombTimer -= dt;
+    const bombGap = Math.max(2.2, 4.5 - Math.min(score*0.004, 2.0));
+    if (bombTimer <= 0) { spawnBomb(); bombTimer = bombGap; }
+
+    let ax = 0, ay = 0;
+    const up = keys.has("arrowup") || keys.has("w");
+    const down = keys.has("arrowdown") || keys.has("s");
+    const left = keys.has("arrowleft") || keys.has("a");
+    const right = keys.has("arrowright") || keys.has("d");
+    if (up) ay -= 1;
+    if (down) ay += 1;
+    if (left) ax -= 1;
+    if (right) ax += 1;
+
+    const mag = Math.hypot(ax, ay) || 1;
+    ax /= mag; ay /= mag;
+
+    // you can keep your slower values or speed it up here
+    const accel = 10000;
+    player.vx += ax * accel * dt;
+    player.vy += ay * accel * dt;
+
+    player.dashCd = Math.max(0, player.dashCd - dt);
+    if (player.inv > 0) player.inv -= dt;
+
+    const dashPressed = keys.has(" ");
+    if (dashPressed && player.dashCd <= 0) {
+      const dirMag = Math.hypot(player.vx, player.vy);
+      let dx, dy;
+      if (dirMag > 1) {
+        dx = player.vx / dirMag;
+        dy = player.vy / dirMag;
+      } else {
+        dx = ax; dy = ay;
+        if (Math.hypot(dx,dy) < 0.1) { dx = 1; dy = 0; }
+      }
+      player.vx += dx * 520;
+      player.vy += dy * 520;
+      player.dashCd = 0.75;
+      player.inv = 0.18;
+    }
+
+    const friction = 0.86;
+    player.vx *= Math.pow(friction, dt*60);
+    player.vy *= Math.pow(friction, dt*60);
+
+    const maxSpd = 320;
+    const spd = Math.hypot(player.vx, player.vy);
+    if (spd > maxSpd) {
+      player.vx = player.vx/spd * maxSpd;
+      player.vy = player.vy/spd * maxSpd;
+    }
+
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+
+    const pad = 18;
+    player.x = clamp(player.x, pad, w - pad);
+    player.y = clamp(player.y, pad, h - pad);
+
+    for (const o of orbs) {
+      o.x += o.vx * dt;
+      o.y += o.vy * dt;
+      const toX = player.x - o.x;
+      const toY = player.y - o.y;
+      const d = Math.hypot(toX,toY) || 1;
+      const turn = 40 + Math.min(score*0.02, 55);
+      o.vx += (toX/d) * turn * dt;
+      o.vy += (toY/d) * turn * dt;
+      const os = Math.hypot(o.vx,o.vy);
+      const omax = 240 + Math.min(score*0.25, 220);
+      if (os > omax) { o.vx = o.vx/os * omax; o.vy = o.vy/os * omax; }
+    }
+
+    for (let i=bombs.length-1;i>=0;i--) {
+      const b = bombs[i];
+      b.fuse -= dt;
+      if (!b.boom && b.fuse <= 0) explode(b);
+      if (b.boom && b.fuse <= -0.3) bombs.splice(i,1);
+    }
+
+    for (let i=pulses.length-1;i>=0;i--) {
+      const p = pulses[i];
+      p.r += p.speed * dt;
+      if (p.r >= p.max) pulses.splice(i,1);
+    }
+
+    if (player.inv <= 0) {
+      for (const o of orbs) {
+        const d = len(player.x - o.x, player.y - o.y);
+        if (d < player.r + o.r) { alive = false; break; }
+      }
+      for (const p of pulses) {
+        const d = len(player.x - p.x, player.y - p.y);
+        if (d < p.r + player.r && d > p.r - 12) { alive = false; break; }
+      }
+    }
+
+    for (const b of bombs) {
+      if (b.boom) continue;
+      const d = len(player.x - b.x, player.y - b.y);
+      if (d < 42) score += dt * 4.2;
+    }
+  }
+
+  function draw() {
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1;
+    for (let x=0; x<w; x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+    for (let y=0; y<h; y+=40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+
+    for (const p of pulses) {
+      ctx.globalAlpha = 0.8;
+      ctx.strokeStyle = "#9ae6ff";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    for (const b of bombs) {
+      const blink = Math.max(0, Math.min(1, 1 - b.fuse/2.2));
+      ctx.fillStyle = b.boom ? "#9ae6ff" : "#ffb86b";
+      ctx.globalAlpha = b.boom ? 0.25 : (0.55 + 0.45*Math.sin((1+blink*8)*t*6));
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      if (!b.boom) {
+        ctx.fillStyle = "#ffffff";
+        ctx.globalAlpha = 0.12;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 30, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    for (const o of orbs) {
+      ctx.fillStyle = "#ff4d6d";
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, o.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // player with skin
+    skin = loadSkin();
+    const alpha = player.inv > 0 ? 0.35 : 1;
+    drawPlayerShape(ctx, player.x, player.y, player.r, skin.shape, skin.color, alpha);
+
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "16px system-ui, -apple-system, segoe ui, roboto, arial";
+    ctx.textAlign = "left";
+    ctx.fillText("score: " + Math.floor(score), 14, 24);
+    ctx.fillText("best: " + best, 14, 44);
+
+    const cd = player.dashCd;
+    const pct = 1 - clamp(cd/0.75, 0, 1);
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(14, 56, 120, 10);
+    ctx.fillStyle = "#e5e7eb";
+    ctx.globalAlpha = 0.35 + 0.65*pct;
+    ctx.fillRect(14, 56, 120*pct, 10);
+    ctx.globalAlpha = 1;
+
+    if (!alive) {
+      ctx.fillStyle = "#ffffff";
+      ctx.globalAlpha = 0.9;
+      ctx.font = "28px system-ui, -apple-system, segoe ui, roboto, arial";
+      ctx.textAlign = "center";
+      ctx.fillText("game over", w/2, h/2 - 12);
+      ctx.font = "16px system-ui, -apple-system, segoe ui, roboto, arial";
+      ctx.fillText("press r to restart", w/2, h/2 + 18);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.fillStyle = "#cbd5e1";
+    ctx.globalAlpha = 0.7;
+    ctx.font = "13px system-ui, -apple-system, segoe ui, roboto, arial";
+    ctx.textAlign = "right";
+    ctx.fillText("space to dash, esc skins", w-14, 22);
+    ctx.globalAlpha = 1;
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    if (overlay.style.display === "none") step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+
+openSkins();
+</script>
+</body>
+</html>
