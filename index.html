@@ -10,11 +10,13 @@
       background: radial-gradient(ellipse at center, #1a1f2e 0%, #0b0f14 100%);
       font-family: system-ui, -apple-system, segoe ui, roboto, arial;
       overflow: hidden;
+      touch-action: none;
     }
     canvas { 
       display:block; margin:0 auto; 
       background: radial-gradient(ellipse at center, #1a1f2e 0%, #0b0f14 100%);
       box-shadow: 0 0 100px rgba(0,0,0,0.8);
+      touch-action: none;
     }
 
     /* skin overlay */
@@ -66,6 +68,7 @@
       outline:none;
       font-size:14px;
       transition: all 0.2s ease;
+      touch-action: manipulation;
     }
     select:hover, select:focus {
       border-color: rgba(110,231,183,0.3);
@@ -168,6 +171,83 @@ function fit() {
 window.addEventListener("resize", fit);
 fit();
 
+/* --- touch support (adds phone controls without changing gameplay) --- */
+let touchActive = false;
+let touchId = null;
+let touchStartX = 0, touchStartY = 0;
+let touchDx = 0, touchDy = 0;
+
+function clearTouch() {
+  touchActive = false;
+  touchId = null;
+  touchDx = 0;
+  touchDy = 0;
+}
+
+function isOverlayOpen() {
+  return overlay.style.display !== "none";
+}
+
+// prevent scroll / bounce on mobile
+window.addEventListener("touchmove", (e) => {
+  if (!isOverlayOpen()) e.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchstart", (e) => {
+  if (isOverlayOpen()) return;
+
+  // 1st finger becomes the movement stick
+  for (const t of e.changedTouches) {
+    if (touchId === null) {
+      touchId = t.identifier;
+      touchActive = true;
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchDx = 0; touchDy = 0;
+      break;
+    }
+  }
+
+  // quick tap with any finger triggers dash (space)
+  keys.add(" ");
+  setTimeout(() => keys.delete(" "), 60);
+
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchmove", (e) => {
+  if (!touchActive || isOverlayOpen()) return;
+
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchId) {
+      touchDx = t.clientX - touchStartX;
+      touchDy = t.clientY - touchStartY;
+      break;
+    }
+  }
+
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchend", (e) => {
+  if (!touchActive) return;
+
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchId) {
+      clearTouch();
+      break;
+    }
+  }
+
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchcancel", (e) => {
+  clearTouch();
+  e.preventDefault();
+}, { passive: false });
+
+/* --- keyboard --- */
 const keys = new Set();
 window.addEventListener("keydown", e => {
   keys.add(e.key.toLowerCase());
@@ -402,19 +482,32 @@ function startGame() {
     if (bombTimer <= 0) { spawnBomb(); bombTimer = bombGap; }
 
     let ax = 0, ay = 0;
+
     const up = keys.has("arrowup") || keys.has("w");
     const down = keys.has("arrowdown") || keys.has("s");
     const left = keys.has("arrowleft") || keys.has("a");
     const right = keys.has("arrowright") || keys.has("d");
+
     if (up) ay -= 1;
     if (down) ay += 1;
     if (left) ax -= 1;
     if (right) ax += 1;
 
+    // touch movement maps to same ax/ay
+    if (!up && !down && !left && !right && touchActive) {
+      const dead = 10;
+      const max = 70;
+      const tx = Math.max(-max, Math.min(max, touchDx));
+      const ty = Math.max(-max, Math.min(max, touchDy));
+      const mx = Math.abs(tx) < dead ? 0 : tx / max;
+      const my = Math.abs(ty) < dead ? 0 : ty / max;
+      ax += mx;
+      ay += my;
+    }
+
     const mag = Math.hypot(ax, ay) || 1;
     ax /= mag; ay /= mag;
 
-    // you can keep your slower values or speed it up here
     const accel = 10000;
     player.vx += ax * accel * dt;
     player.vy += ay * accel * dt;
@@ -551,7 +644,6 @@ function startGame() {
       ctx.globalAlpha = 1;
     }
 
-    // player with skin
     skin = loadSkin();
     const alpha = player.inv > 0 ? 0.35 : 1;
     drawPlayerShape(ctx, player.x, player.y, player.r, skin.shape, skin.color, alpha);
